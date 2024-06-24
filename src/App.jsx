@@ -1,77 +1,63 @@
 import { useState } from "react";
+import confetti from "canvas-confetti";
+import { Square } from "./components/Square";
+import { TURNS } from "./constants";
+import { checkWinnerFrom, checkEndGame } from "./logic/board";
+import { WinnerModal } from "./components/WinnerModal";
 
-const TURNS = {
-  X: "x",
-  O: "o",
-};
-
-const Square = ({ children, isSelected, updateBoard, index }) => {
-  //componente separado de la app reutilizable
-  const className = `square ${isSelected ? "is-selected" : ""}`;
-
-  const handleClick = () => {
-    updateBoard(index);
-  }
-
-  return (
-     <div onClick={handleClick} className={className}>
-      {children}
-    </div>
-  );
-};
-
-const WINNER_COMBOS = [
-  [0, 1, 2],
-  [3, 4, 5],
-  [6, 7, 8],
-  [0, 3, 6],
-  [1, 4, 7],
-  [2, 5, 8],
-  [0, 4, 8],
-  [2, 4, 6],
-]
 
 function App() { //componente padre app
-  const [board, setBoard] = useState(Array(9).fill(null));
-  console.log(board);
+  console.log('render')
 
-  const [turn, setTurn] = useState(TURNS.X); //inicie el turno en X
+  const [board, setBoard] = useState(() => {
+    console.log('inicializar estado del board')
+    const boardFromStorage = window.localStorage.getItem('board');
+    if (boardFromStorage) return JSON.parse(boardFromStorage);
+    return Array(9).fill(null);
+  })
+
+  const [turn, setTurn] = useState(() => {//inicie el turno en X
+    const turnFromStorage = window.localStorage.getItem('turn');
+    return turnFromStorage ?? TURNS.X;// ?? mira si es null o undefined y || mira si es falsy 
+  }); 
+
   const [winner, setWinner] = useState(null); //null es que no hay ganador , false es que hay un empate
 
-  const checkWinner = (boardToCheck) => {
-    for(const combo of WINNER_COMBOS) {
-      //revisamos todas las combinaciones de 3 posiciones
-      //si todas las posiciones son iguales, es un ganador
-      const [a, b, c] = combo;
-      if(
-        boardToCheck[a] && boardToCheck[a] === boardToCheck[b] && boardToCheck[a] === boardToCheck[c]
-      ){
-        return boardToCheck[a];
-      }
-    }
-    return null; //no hay ganador
-  }
-
-  const resetGame = () => {//seteamos el estado a sus valores iniciales
+ 
+  const resetGame = () => {//seteamos el estado a sus valores iniciales 
     setBoard(Array(9).fill(null));
     setTurn(TURNS.X);
     setWinner(null);
+
+    //limpiamos el localStorage de partidas y turno
+    window.localStorage.removeItem('board');
+    window.localStorage.removeItem('turn');
   }
+
+ 
+ 
 
   const updateBoard = (index) => {
     if(board[index] || winner) return; // cunado en esa posicion ya esta marcado o hay ganador no se actualiza
     //actualizamos el tablero
     const newBoard = [...board]//crear una copia del array // nunca hacer esto board[index] = turn no tenemos que mutar nunca las props ni el ESTADO
     newBoard[index] = turn;
-    setBoard(newBoard);
+    setBoard(newBoard);//asincrona
 
     //actualizamos el turno
     const newTurn = turn === TURNS.X ? TURNS.O : TURNS.X;
     setTurn(newTurn);
+    //guardar partida
+    window.localStorage.setItem('board', JSON.stringify(newBoard));
+    window.localStorage.setItem('turn', newTurn);
+
     //revisar si hay ganador
-    const newWinner = checkWinner(board);
+    const newWinner = checkWinnerFrom(board);
    if(newWinner) {
+    confetti();
      setWinner(newWinner);//los estados son asincronos, por eso debemos pasar siempre el ultimo estado. IMPORTANTISIMO
+   }else if(checkEndGame(newBoard)) {
+     setWinner(false);//empate
    }
   }
 
@@ -80,10 +66,10 @@ function App() { //componente padre app
       <h1>Tic Tac Toe</h1>
       <button onClick={resetGame}>Reset Game</button>
       <section className="game">
-        {board.map((_, index) => {
+        {board.map((square, index) => {
           return (
             <Square key={index} index={index} updateBoard={updateBoard} >
-              {board[index]}
+              {square}
             </Square>
           );
         })}
@@ -94,27 +80,7 @@ function App() { //componente padre app
         <Square isSelected={turn === TURNS.O}>{TURNS.O}</Square>
       </section>
 
-      {
-        winner !== null && (
-          <section className="winner">
-            <div className="text">
-              <h2>
-              {
-                winner === false ? 'Empate' : 'Ganador'
-              }
-              </h2>
-
-              <header className="win">
-                {winner && <Square>{winner}</Square>}
-              </header>
-
-              <footer>
-                <button onClick={resetGame}>Empezar de nuevo</button>
-              </footer>
-            </div>
-          </section>
-        )
-      }
+      <WinnerModal winner={winner} resetGame={resetGame} />
     </main>
   );
 }
